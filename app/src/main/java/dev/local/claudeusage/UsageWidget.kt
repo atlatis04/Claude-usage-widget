@@ -21,7 +21,9 @@ class UsageWidget : AppWidgetProvider() {
         UsageWorker.refreshNow(context)
     }
 
-    override fun onDisabled(context: Context) = UsageWorker.cancel(context)
+    override fun onDisabled(context: Context) {
+        UsageWorker.cancel(context)
+    }
 
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
         renderAll(ctx)
