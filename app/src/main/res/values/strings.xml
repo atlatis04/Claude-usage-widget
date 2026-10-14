@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Claude 사용량</string>
+    <string name="widget_desc">Claude.ai 5시간·주간 사용 한도</string>
+</resources>
