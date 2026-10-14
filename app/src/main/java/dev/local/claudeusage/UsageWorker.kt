@@ -8,13 +8,15 @@ class UsageWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
     override suspend fun doWork(): Result {
         val ctx = applicationContext
         val snap = try {
-            UsageApi.fetch(ctx)
+            UsageApi.fetch(ctx).also { Prefs.setAuthState(ctx, AuthState.OK) }
         } catch (e: AuthException) {
+            if (Prefs.sessionKey(ctx) != null) Prefs.setAuthState(ctx, AuthState.EXPIRED)
             Prefs.loadSnapshot(ctx).copy(error = e.message)
         } catch (e: Exception) {
-            Prefs.loadSnapshot(ctx).copy(error = "갱신 실패: ${e.message}")
+            Prefs.loadSnapshot(ctx).copy(error = "갱신 실패: ${e.message ?: e.javaClass.simpleName}")
         }
         Prefs.saveSnapshot(ctx, snap)
+        Prefs.setRefreshing(ctx, false)
         UsageWidget.renderAll(ctx)
         return Result.success()
     }
@@ -33,6 +35,8 @@ class UsageWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx,
         }
 
         fun refreshNow(ctx: Context) {
+            Prefs.setRefreshing(ctx, true)
+            UsageWidget.renderAll(ctx)
             val req = OneTimeWorkRequestBuilder<UsageWorker>().setConstraints(net).build()
             WorkManager.getInstance(ctx).enqueueUniqueWork(NOW, ExistingWorkPolicy.REPLACE, req)
         }

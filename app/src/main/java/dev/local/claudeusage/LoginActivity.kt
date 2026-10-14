@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
-import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.webkit.CookieManager
@@ -94,9 +93,7 @@ class LoginActivity : Activity() {
         settings.setSupportMultipleWindows(true)
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         // Google은 "; wv"가 붙은 WebView UA를 차단하므로 일반 Chrome UA로 보이게 한다
-        settings.userAgentString = settings.userAgentString
-            .replace("; wv", "")
-            .replace(Regex("Version/\\d+\\.\\d+ "), "")
+        settings.userAgentString = Browser.userAgent(this@LoginActivity)
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
         webViewClient = object : WebViewClient() {

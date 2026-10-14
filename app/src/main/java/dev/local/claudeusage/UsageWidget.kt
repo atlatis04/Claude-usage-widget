@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.widget.RemoteViews
 import java.time.Duration
 import java.time.Instant
@@ -18,7 +19,7 @@ class UsageWidget : AppWidgetProvider() {
 
     override fun onEnabled(context: Context) {
         UsageWorker.schedule(context)
-        UsageWorker.refreshNow(context)
+        if (Prefs.sessionKey(context) != null) UsageWorker.refreshNow(context)
     }
 
     override fun onDisabled(context: Context) {
@@ -51,6 +52,7 @@ class UsageWidget : AppWidgetProvider() {
 
         private fun build(ctx: Context): RemoteViews {
             val s = Prefs.loadSnapshot(ctx)
+            val auth = Prefs.authState(ctx)
             val v = RemoteViews(ctx.packageName, R.layout.widget_usage)
 
             fun pct(p: Float?) = p?.let { "${it.toInt()}%" } ?: "—"
@@ -62,30 +64,45 @@ class UsageWidget : AppWidgetProvider() {
             v.setProgressBar(R.id.week_bar, 100, (s.weekPct ?: 0f).toInt().coerceIn(0, 100), false)
             v.setTextViewText(R.id.week_reset, resetLabel(s.weekReset, short = false))
 
+            // 로그인 상태 표시
+            val (statusText, statusColor) = when (auth) {
+                AuthState.NONE -> "● 로그인 필요" to "#9E9E9E"
+                AuthState.EXPIRED -> "● 로그인 만료" to "#FF7A6B"
+                AuthState.OK -> "● 로그인됨" to "#8FD18F"
+            }
+            v.setTextViewText(R.id.status, statusText)
+            v.setTextColor(R.id.status, Color.parseColor(statusColor))
+
             val footer = when {
-                Prefs.sessionKey(ctx) == null -> "탭해서 로그인"
+                Prefs.refreshing(ctx) -> "새로고침 중…"
+                auth == AuthState.NONE -> "탭해서 로그인"
+                auth == AuthState.EXPIRED -> "탭해서 다시 로그인"
                 s.error != null -> s.error
                 s.fetchedAt > 0 -> "갱신 " + Instant.ofEpochMilli(s.fetchedAt)
                     .atZone(ZoneId.systemDefault())
-                    .format(DateTimeFormatter.ofPattern("HH:mm")) + " · 탭해서 새로고침"
+                    .format(DateTimeFormatter.ofPattern("HH:mm"))
                 else -> "불러오는 중…"
             }
             v.setTextViewText(R.id.footer, footer)
+            v.setTextViewText(R.id.refresh_btn, if (Prefs.refreshing(ctx)) "…" else "⟳")
 
-            // 로그인 전이면 앱 열기, 로그인 후엔 즉시 새로고침
-            val pi = if (Prefs.sessionKey(ctx) == null) {
+            // 위젯 본문 탭 → 앱 열기 (로그인 상태 확인/다시 로그인)
+            v.setOnClickPendingIntent(
+                R.id.root,
                 PendingIntent.getActivity(
                     ctx, 0, Intent(ctx, MainActivity::class.java),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
-            } else {
+            )
+            // ⟳ 버튼 → 즉시 새로고침
+            v.setOnClickPendingIntent(
+                R.id.refresh_btn,
                 PendingIntent.getBroadcast(
                     ctx, 1,
                     Intent(ctx, UsageWidget::class.java).setAction(ACTION_REFRESH),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
-            }
-            v.setOnClickPendingIntent(R.id.root, pi)
+            )
             return v
         }
 
